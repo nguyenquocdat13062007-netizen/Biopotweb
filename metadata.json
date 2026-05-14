@@ -1,0 +1,6 @@
+{
+  "name": "BioPot Smart Dehydration Calculator",
+  "description": "A full-stack application to calculate and compare plant dehydration rates in real-time, featuring BioPot water-saving analytics and climate simulation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

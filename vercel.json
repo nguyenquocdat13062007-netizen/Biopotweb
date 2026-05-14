@@ -1,0 +1,11 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/plants", "destination": "/api/plants" },
+    { "source": "/api/weather", "destination": "/api/weather" },
+    { "source": "/api/calculate", "destination": "/api/calculate" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
