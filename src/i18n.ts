@@ -133,7 +133,7 @@ const resources = {
       "water_need_suffix": "",
       "moisture_trend_sub": "Dự đoán xu hướng độ ẩm",
       "boost_label": "Tăng cường",
-      "evolution_tag": "Công Hệ BioPot Mới",
+      "evolution_tag": "Công Nghệ BioPot Mới",
     }
   }
 };
