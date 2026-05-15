@@ -279,6 +279,7 @@ function App() {
   const [isPotOpen, setIsPotOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const isSelectionMade = useRef(false);
 
   useEffect(() => {
     const fetchPlants = async () => {
@@ -305,13 +306,17 @@ function App() {
 
   // Location Autocomplete Effect
   useEffect(() => {
+    if (isSelectionMade.current) {
+      isSelectionMade.current = false;
+      setSuggestions([]);
+      return;
+    }
+
     if (location.trim().length < 2) {
       setSuggestions([]);
       return;
     }
 
-    // Don't search if the name matches the selected coords name exactly (to avoid loop)
-    // Actually, just checking length is fine for now with the timer
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
@@ -707,7 +712,8 @@ function App() {
                               <button
                                 key={`${s.name}-${s.lat}-${idx}`}
                                 onClick={() => {
-                                  const name = `${s.name}${s.state ? `, ${s.state}` : ''}, ${s.country}`;
+                                  const name = `${s.name}${s.state && s.state !== s.name ? `, ${s.state}` : ''}, ${s.country}`;
+                                  isSelectionMade.current = true;
                                   setLocation(name);
                                   setSelectedCoords({ lat: s.lat, lon: s.lon });
                                   setShowSuggestions(false);
@@ -718,7 +724,7 @@ function App() {
                                 <div>
                                   <p className="font-bold text-slate-800 text-sm leading-none">{s.name}</p>
                                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
-                                    {s.state ? `${s.state}, ` : ''}{s.country}
+                                    {s.state && s.state !== s.name ? `${s.state}, ` : ''}{s.country}
                                   </p>
                                 </div>
                               </button>
