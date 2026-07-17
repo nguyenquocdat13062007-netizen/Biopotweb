@@ -38,6 +38,7 @@ import leafImg from './BIO_IMAGE/leaf.jpg';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import './i18n';
+import CameraScanner from './CameraScanner';
 
 // Constants
 const POT_TYPES = [
@@ -62,7 +63,7 @@ const DEFAULT_CHART_DATA = Array.from({ length: 11 }).map((_, i) => ({
   name: `${i}d`
 }));
 
-type AppView = 'home' | 'realtime' | 'simulation';
+type AppView = 'home' | 'realtime' | 'simulation' | 'camera';
 
 const CustomNumberInput = ({
   label,
@@ -485,6 +486,14 @@ function App() {
             <TestTube2 size={16} />
             {t('simulation_nav')}
           </button>
+          <button 
+            onClick={() => handleViewChange('camera')}
+            className={`px-8 py-3 rounded-2xl font-bold text-sm transition-all flex items-center gap-2 ${
+                view === 'camera' ? 'bg-primary text-white shadow-lg' : 'text-slate-500 hover:text-primary hover:bg-white/50'
+            }`}
+          >
+            📷 Quét AI Vision
+          </button>
         </div>
 
         <button 
@@ -529,6 +538,16 @@ function App() {
           <TestTube2 size={22} className={view === 'simulation' ? 'fill-primary/20' : ''} />
           <span className="text-[10px] font-black uppercase tracking-widest">{t('simulation_nav')}</span>
           {view === 'simulation' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+        </button>
+        <button 
+          onClick={() => handleViewChange('camera')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
+            view === 'camera' ? 'text-primary' : 'text-slate-400'
+          }`}
+        >
+          <span style={{ fontSize: 22 }}>📷</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">AI Scan</span>
+          {view === 'camera' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
         </button>
       </div>
 
@@ -1047,6 +1066,13 @@ function App() {
            </motion.main>
          )}
       </AnimatePresence>
+
+      {/* Camera View */}
+      {view === 'camera' && (
+        <div className="pt-20 pb-24">
+          <CameraScanner />
+        </div>
+      )}
 
       <footer className="bg-white py-16 border-t border-slate-50">
         <div className="max-w-[1400px] mx-auto px-6 flex flex-col items-center gap-8">
