@@ -575,8 +575,11 @@ function App() {
       </div>
 
       <AnimatePresence mode="wait">
-        {view === 'home' ? (
-          <motion.section 
+        {view === 'camera' ? (
+          // Camera is rendered in the fixed overlay below — nothing needed here
+          <motion.div key="camera-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 0 }} exit={{ opacity: 0 }} />
+        ) : view === 'home' ? (
+          <motion.section
             key="home"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
