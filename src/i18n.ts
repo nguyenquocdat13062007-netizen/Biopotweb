@@ -19,6 +19,7 @@ const resources = {
       "home": "HOME",
       "realtime_nav": "Realtime",
       "simulation_nav": "Simulation",
+      "ai_vision_nav": "AI Vision Scan",
       "welcome_title": "WELCOME TO BIOPOT",
       "welcome_desc": "A tool to calculate plant water loss based on real-time weather data. Predict soil moisture and rewatering times, while comparing water retention between standard pots and BioPot.",
       "feat1_title": "Scientific Calculation",
@@ -66,7 +67,7 @@ const resources = {
       "water_need_suffix": "NEED",
       "moisture_trend_sub": "Moisture trend projection",
       "boost_label": "Boost",
-      "evolution_tag": "BioPot Evolution",
+      "evolution_tag": "BioPot Evolution"
     }
   },
   vi: {
@@ -86,6 +87,7 @@ const resources = {
       "home": "TRANG CHỦ",
       "realtime_nav": "Thực tế",
       "simulation_nav": "Giả lập",
+      "ai_vision_nav": "Quét AI Vision",
       "welcome_title": "CHÀO MỪNG ĐẾN VỚI BIOPOT",
       "welcome_desc": "Công cụ giúp tính toán tốc độ mất nước của cây dựa trên dữ liệu thời tiết thực tế. Từ đó dự đoán độ ẩm đất và thời điểm cần tưới lại, đồng thời so sánh hiệu quả giữ nước giữa các loại chậu và BioPot.",
       "feat1_title": "Tính toán khoa học",
@@ -133,7 +135,7 @@ const resources = {
       "water_need_suffix": "",
       "moisture_trend_sub": "Dự đoán xu hướng độ ẩm",
       "boost_label": "Tăng cường",
-      "evolution_tag": "Công Nghệ BioPot Mới",
+      "evolution_tag": "Công Nghệ BioPot Mới"
     }
   }
 };
@@ -144,9 +146,7 @@ i18n
     resources,
     lng: 'vi',
     fallbackLng: 'en',
-    interpolation: {
-      escapeValue: false
-    }
+    interpolation: { escapeValue: false }
   });
 
 export default i18n;
