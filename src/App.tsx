@@ -19,7 +19,9 @@ import {
   MapPin,
   Thermometer,
   Menu,
-  X
+  X,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -249,6 +251,7 @@ const CustomNumberInput = ({
 function App() {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<AppView>('home');
+  const [darkMode, setDarkMode] = useState(false);
   
   const [resetKey, setResetKey] = useState(0);
 
@@ -446,9 +449,9 @@ function App() {
 //////
 
   return (
-    <div className="min-h-screen bg-beige font-sans text-slate-800 selection:bg-green-200">
+    <div className={`min-h-screen font-sans selection:bg-green-200 ${darkMode ? 'bg-[#0d1117] text-slate-100' : 'bg-beige text-slate-800'}`}>
       {/* Navbar */}
-      <nav className="fixed top-0 w-full z-[100] bg-white/80 backdrop-blur-md border-b border-white/20 flex justify-between items-center px-4 sm:px-6 md:px-12 py-3 sm:py-5">
+      <nav className={`fixed top-0 w-full z-[100] backdrop-blur-md border-b flex justify-between items-center px-4 sm:px-6 md:px-12 py-3 sm:py-5 ${darkMode ? 'bg-[#0d1117]/90 border-white/10' : 'bg-white/80 border-white/20'}`}>
         <button 
           onClick={() => handleViewChange('home')}
           className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
@@ -496,15 +499,34 @@ function App() {
           </button>
         </div>
 
-        <button 
-          onClick={toggleLanguage}
-          className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-3 bg-white rounded-xl sm:rounded-2xl border border-white font-bold text-xs sm:text-sm text-slate-700 hover:bg-green-50 transition-all shadow-sm"
-        >
-          <Globe size={16} sm:size={18} className="text-primary" />
-          <span className="hidden xs:inline">{i18n.language === 'en' ? 'English' : 'Tiếng Việt'}</span>
-          <span className="xs:hidden">{i18n.language === 'en' ? 'EN' : 'VI'}</span>
-          <ChevronDown size={12} className="opacity-30" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Dark mode toggle */}
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl border font-bold text-xs sm:text-sm transition-all shadow-sm ${
+              darkMode
+                ? 'bg-[#1a2332] border-white/10 text-yellow-400 hover:bg-[#243044]'
+                : 'bg-white border-white text-slate-700 hover:bg-green-50'
+            }`}
+          >
+            {darkMode ? <Sun size={16} className="text-yellow-400" /> : <Moon size={16} className="text-slate-500" />}
+          </button>
+
+          {/* Language toggle */}
+          <button 
+            onClick={toggleLanguage}
+            className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border font-bold text-xs sm:text-sm transition-all shadow-sm ${
+              darkMode
+                ? 'bg-[#1a2332] border-white/10 text-slate-200 hover:bg-[#243044]'
+                : 'bg-white border-white text-slate-700 hover:bg-green-50'
+            }`}
+          >
+            <Globe size={16} className="text-primary" />
+            <span className="hidden xs:inline">{i18n.language === 'en' ? 'English' : 'Tiếng Việt'}</span>
+            <span className="xs:hidden">{i18n.language === 'en' ? 'EN' : 'VI'}</span>
+            <ChevronDown size={12} className="opacity-30" />
+          </button>
+        </div>
       </nav>
 
       {/* Mobile Bottom Navigation */}
@@ -1067,14 +1089,16 @@ function App() {
          )}
       </AnimatePresence>
 
-      {/* Camera View */}
+      {/* Camera View — fullscreen, replaces everything below nav */}
       {view === 'camera' && (
-        <div className="pt-20 pb-24">
-          <CameraScanner />
+        <div className="fixed inset-0 z-[50] pt-[60px] lg:pt-[72px]">
+          <CameraScanner darkMode={darkMode} />
         </div>
       )}
 
-      <footer className="bg-white py-16 border-t border-slate-50">
+      {/* Footer — hidden when camera is active */}
+      {view !== 'camera' && (
+      <footer className={`py-16 border-t ${darkMode ? 'bg-[#0d1117] border-white/5' : 'bg-white border-slate-50'}`}>
         <div className="max-w-[1400px] mx-auto px-6 flex flex-col items-center gap-8">
             <div className="flex items-center gap-4 text-primary bg-beige p-6 rounded-full shadow-inner">
                 <Leaf size={32} />
@@ -1090,6 +1114,7 @@ function App() {
             </div>
         </div>
       </footer>
+      )}
     </div>
   );
 }
