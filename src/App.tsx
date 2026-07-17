@@ -429,7 +429,7 @@ function App() {
             onClick={() => setDarkMode(!darkMode)}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl border font-bold text-xs sm:text-sm transition-all shadow-sm ${darkMode ? 'bg-[#1a2332] border-white/10 text-yellow-400 hover:bg-[#243044]' : 'bg-white border-white text-slate-700 hover:bg-green-50'}`}
           >
-            {darkMode ? <Sun size={16} className="text-yellow-400" /> : <Moon size={16} className="text-slate-500" />}
+            {darkMode ? <Moon size={16} className="text-yellow-400" /> : <Sun size={16} className="text-slate-500" />}
           </button>
           <button
             onClick={toggleLanguage}
