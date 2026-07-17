@@ -540,7 +540,7 @@ function App() {
         >
           <Home size={22} className={view === 'home' ? 'fill-primary/20' : ''} />
           <span className="text-[10px] font-black uppercase tracking-widest">{t('home')}</span>
-          {view === 'home' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+          <div className={`w-1 h-1 rounded-full bg-primary mt-0.5 transition-opacity duration-200 ${view === 'home' ? 'opacity-100' : 'opacity-0'}`} />
         </button>
         <button 
           onClick={() => handleViewChange('realtime')}
@@ -550,7 +550,7 @@ function App() {
         >
           <Globe size={22} className={view === 'realtime' ? 'fill-primary/20' : ''} />
           <span className="text-[10px] font-black uppercase tracking-widest">{t('realtime_nav')}</span>
-          {view === 'realtime' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+          <div className={`w-1 h-1 rounded-full bg-primary mt-0.5 transition-opacity duration-200 ${view === 'realtime' ? 'opacity-100' : 'opacity-0'}`} />
         </button>
         <button 
           onClick={() => handleViewChange('simulation')}
@@ -560,7 +560,7 @@ function App() {
         >
           <TestTube2 size={22} className={view === 'simulation' ? 'fill-primary/20' : ''} />
           <span className="text-[10px] font-black uppercase tracking-widest">{t('simulation_nav')}</span>
-          {view === 'simulation' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+          <div className={`w-1 h-1 rounded-full bg-primary mt-0.5 transition-opacity duration-200 ${view === 'simulation' ? 'opacity-100' : 'opacity-0'}`} />
         </button>
         <button 
           onClick={() => handleViewChange('camera')}
@@ -570,15 +570,12 @@ function App() {
         >
           <span style={{ fontSize: 22 }}>📷</span>
           <span className="text-[10px] font-black uppercase tracking-widest">AI Scan</span>
-          {view === 'camera' && <motion.div layoutId="nav-pill" className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+          <div className={`w-1 h-1 rounded-full bg-primary mt-0.5 transition-opacity duration-200 ${view === 'camera' ? 'opacity-100' : 'opacity-0'}`} />
         </button>
       </div>
 
       <AnimatePresence mode="wait">
-        {view === 'camera' ? (
-          // Camera is rendered in the fixed overlay below — nothing needed here
-          <motion.div key="camera-placeholder" initial={{ opacity: 0 }} animate={{ opacity: 0 }} exit={{ opacity: 0 }} />
-        ) : view === 'home' ? (
+        {view === 'camera' ? null : view === 'home' ? (
           <motion.section
             key="home"
             initial={{ opacity: 0 }}
