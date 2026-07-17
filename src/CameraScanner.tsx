@@ -454,7 +454,10 @@ export default function CameraScanner({ darkMode = true }) {
               ))}
             </div>
 
-            {activeTab === "fao" ? renderFAO(result.fao, result.vision) : renderVision(result.vision)}
+            {activeTab === "fao"
+              ? result.fao ? renderFAO(result.fao, result.vision) : null
+              : result.vision ? renderVision(result.vision) : null
+            }
           </div>
         )}
       </div>
