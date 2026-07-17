@@ -9,6 +9,7 @@ interface ScanResult {
   potLabel: string;
   potStatus: "new" | "moderate" | "decomposed";
   timestamp: string;
+  notFound?: boolean;
 }
 
 interface Props {
@@ -19,38 +20,69 @@ const SCAN_DURATION_MS = 1200;
 
 // ─── Pixel Analysis ───────────────────────────────────────────────────────────
 function analyzeFrame(canvas: HTMLCanvasElement): ScanResult {
-  const ctx = canvas.getContext("2d")!;
-  const { width, height } = canvas;
-  const x0 = Math.floor(width * 0.2);
-  const y0 = Math.floor(height * 0.2);
-  const w = Math.floor(width * 0.6);
-  const h = Math.floor(height * 0.6);
-  const imageData = ctx.getImageData(x0, y0, w, h);
-  const data = imageData.data;
-  const totalPixels = w * h;
-  let sumExG = 0;
-  let brownCount = 0;
+  try {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No canvas context");
 
-  for (let i = 0; i < data.length; i += 4) {
-    const R = data[i], G = data[i + 1], B = data[i + 2];
-    sumExG += 2 * G - R - B;
-    if (R > 120 && G > 60 && G < 160 && B < 80 && R > G && R > B) brownCount++;
+    const { width, height } = canvas;
+    if (!width || !height) throw new Error("Empty canvas");
+
+    const x0 = Math.floor(width * 0.2);
+    const y0 = Math.floor(height * 0.2);
+    const w = Math.floor(width * 0.6);
+    const h = Math.floor(height * 0.6);
+    if (w <= 0 || h <= 0) throw new Error("Invalid dimensions");
+
+    const imageData = ctx.getImageData(x0, y0, w, h);
+    const data = imageData.data;
+    const totalPixels = w * h;
+
+    let sumExG = 0;
+    let brownCount = 0;
+    let greenCount = 0;   // pixels that look plant-like
+    let nonBlackCount = 0; // pixels that aren't pure black (blank frame check)
+
+    for (let i = 0; i < data.length; i += 4) {
+      const R = data[i], G = data[i + 1], B = data[i + 2];
+      sumExG += 2 * G - R - B;
+      if (R > 120 && G > 60 && G < 160 && B < 80 && R > G && R > B) brownCount++;
+      // Green-dominant pixel = potential plant/leaf
+      if (G > R + 10 && G > B + 10 && G > 40) greenCount++;
+      // Any non-trivial pixel (not near-black)
+      if (R + G + B > 30) nonBlackCount++;
+    }
+
+    // If frame is mostly black/blank → camera not ready or covered
+    if (nonBlackCount / totalPixels < 0.05) {
+      return { exg: 0, mt: 0, healthLabel: "", healthStatus: "unhealthy", potLabel: "", potStatus: "new", timestamp: new Date().toLocaleTimeString("vi-VN"), notFound: true };
+    }
+
+    const avgExG = sumExG / totalPixels;
+    const greenRatio = greenCount / totalPixels;
+    const mt = Math.min(1, brownCount / totalPixels / 0.15);
+
+    // No plant detected: very low ExG AND very few green pixels AND few brown pixels
+    const noPlantDetected = avgExG < 3 && greenRatio < 0.04 && mt < 0.05;
+    if (noPlantDetected) {
+      return { exg: Math.round(avgExG * 10) / 10, mt: Math.round(mt * 100), healthLabel: "", healthStatus: "unhealthy", potLabel: "", potStatus: "new", timestamp: new Date().toLocaleTimeString("vi-VN"), notFound: true };
+    }
+
+    let healthLabel: string, healthStatus: ScanResult["healthStatus"];
+    if (avgExG > 20) { healthLabel = "Cây Khỏe Mạnh 🌱"; healthStatus = "healthy"; }
+    else if (avgExG > 5) { healthLabel = "Cây Trung Bình ⚡"; healthStatus = "warning"; }
+    else { healthLabel = "Cây Yếu ⚠️"; healthStatus = "unhealthy"; }
+
+    let potLabel: string, potStatus: ScanResult["potStatus"];
+    if (mt > 0.6) { potLabel = "Phân Hủy Cao 🟤"; potStatus = "decomposed"; }
+    else if (mt > 0.3) { potLabel = "Phân Hủy Vừa 🟡"; potStatus = "moderate"; }
+    else { potLabel = "Chậu Mới / Tốt 🟢"; potStatus = "new"; }
+
+    return { exg: Math.round(avgExG * 10) / 10, mt: Math.round(mt * 100), healthLabel, healthStatus, potLabel, potStatus, timestamp: new Date().toLocaleTimeString("vi-VN") };
+
+  } catch {
+    // Safe fallback — never crash the app
+    return { exg: 0, mt: 0, healthLabel: "", healthStatus: "unhealthy", potLabel: "", potStatus: "new", timestamp: new Date().toLocaleTimeString("vi-VN"), notFound: true };
   }
-
-  const avgExG = sumExG / totalPixels;
-  const mt = Math.min(1, brownCount / totalPixels / 0.15);
-
-  let healthLabel: string, healthStatus: ScanResult["healthStatus"];
-  if (avgExG > 20) { healthLabel = "Cây Khỏe Mạnh 🌱"; healthStatus = "healthy"; }
-  else if (avgExG > 5) { healthLabel = "Cây Trung Bình ⚡"; healthStatus = "warning"; }
-  else { healthLabel = "Cây Yếu ⚠️"; healthStatus = "unhealthy"; }
-
-  let potLabel: string, potStatus: ScanResult["potStatus"];
-  if (mt > 0.6) { potLabel = "Phân Hủy Cao 🟤"; potStatus = "decomposed"; }
-  else if (mt > 0.3) { potLabel = "Phân Hủy Vừa 🟡"; potStatus = "moderate"; }
-  else { potLabel = "Chậu Mới / Tốt 🟢"; potStatus = "new"; }
-
-  return { exg: Math.round(avgExG * 10) / 10, mt: Math.round(mt * 100), healthLabel, healthStatus, potLabel, potStatus, timestamp: new Date().toLocaleTimeString("vi-VN") };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -325,7 +357,23 @@ export default function CameraScanner({ darkMode = true }: Props) {
         </div>
 
         {/* ── Results ── */}
-        {result && (
+        {result && result.notFound && (
+          <div style={{ marginTop: 18, background: "rgba(255,90,90,0.07)", border: "1px solid rgba(255,90,90,0.25)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 42 }}>🔍</div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#ff7a7a", letterSpacing: 0.5 }}>Không tìm thấy đối tượng thực vật</div>
+            <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, maxWidth: 320 }}>
+              Vui lòng đưa cây hoặc chậu cây vào khung hình và thử lại. Đảm bảo ánh sáng đủ và đối tượng nằm trong vùng quét.
+            </div>
+            <button
+              onClick={() => setResult(null)}
+              style={{ marginTop: 4, padding: "9px 20px", borderRadius: 10, border: "1px solid rgba(255,90,90,0.3)", background: "rgba(255,90,90,0.1)", color: "#ff8a8a", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+            >
+              ↺ Quét Lại
+            </button>
+          </div>
+        )}
+
+        {result && !result.notFound && (
           <div style={{ marginTop: 18, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)", border: `1px solid ${borderColor}`, borderRadius: 16, padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 1, color: accentGreen }}>KẾT QUẢ PHÂN TÍCH AI</div>
