@@ -362,7 +362,7 @@ export default function CameraScanner({ darkMode = true }) {
 
       {/* Sub-header */}
       <div style={{ width: "100%", maxWidth: 580, padding: "18px 20px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{ width: 42, height: 42, background: accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🌿</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 1 }}>HYDROsense</div>
@@ -372,19 +372,6 @@ export default function CameraScanner({ darkMode = true }) {
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, display: "inline-block" }} />
             CAMERA THẬT
           </div>
-        </div>
-
-        {/* Tab bar — both tabs clickable at any time */}
-        <div style={{ display: "flex", background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)", borderRadius: 10, padding: 4, marginBottom: 16, border: `1px solid ${border}` }}>
-          {[["fao", "📈  Giám Sát FAO-56"], ["vision", "📷  Quét AI Vision"]].map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", background: activeTab === id ? accent : "transparent", color: activeTab === id ? "#0d1117" : textMuted }}
-            >
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 
