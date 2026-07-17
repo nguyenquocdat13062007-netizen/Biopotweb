@@ -1,53 +1,16 @@
 import { useState, useRef, useCallback } from "react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface PixelData {
-  avgExG: number;
-  greenRatio: number;
-  mt: number;
-  notFound: boolean;
-}
-
-interface VisionResult {
-  exg: number;
-  mt: number;
-  healthLabel: string;
-  healthStatus: "healthy" | "warning" | "unhealthy";
-  potLabel: string;
-  potStatus: "new" | "moderate" | "decomposed";
-  timestamp: string;
-}
-
-interface FAOResult {
-  // Pigment-based stress index (replaces temperature)
-  ndvi_proxy: number;       // 0–1, derived from ExG (greenness)
-  stress_factor: number;    // 1.0 = no stress, >1 = stressed
-  ET0: number;              // mm/day reference evapotranspiration
-  ETc: number;              // mm/day crop evapotranspiration
-  v_loss: number;           // % soil moisture lost per day
-  days_to_rewater: number;
-  moisture_now: number;     // estimated current soil moisture %
-  kc: number;               // crop coefficient estimated from pigment
-  pot_efficiency: number;   // BioPot improvement %
-  statusLabel: string;
-  statusColor: string;
-}
-
-interface ScanResult {
-  vision: VisionResult;
-  fao: FAOResult;
-  notFound: boolean;
-  timestamp: string;
-}
-
-interface Props {
-  darkMode?: boolean;
-}
+// ─── Types (JS Doc only, kept for clarity — no runtime effect) ───────────────
+// PixelData: { avgExG, greenRatio, mt, notFound }
+// VisionResult: { exg, mt, healthLabel, healthStatus, potLabel, potStatus, timestamp }
+// FAOResult: { ndvi_proxy, stress_factor, ET0, ETc, v_loss, days_to_rewater,
+//              moisture_now, kc, pot_efficiency, statusLabel, statusColor }
+// ScanResult: { vision, fao, notFound, timestamp }
 
 const SCAN_DURATION_MS = 1200;
 
 // ─── Core pixel analysis ──────────────────────────────────────────────────────
-function extractPixelData(canvas: HTMLCanvasElement): PixelData {
+function extractPixelData(canvas) {
   const ctx = canvas.getContext("2d");
   if (!ctx || !canvas.width || !canvas.height) return { avgExG: 0, greenRatio: 0, mt: 0, notFound: true };
 
@@ -79,14 +42,14 @@ function extractPixelData(canvas: HTMLCanvasElement): PixelData {
 }
 
 // ─── Vision analysis (AI pigment scan) ───────────────────────────────────────
-function buildVisionResult(px: PixelData, ts: string): VisionResult {
+function buildVisionResult(px, ts) {
   const { avgExG, mt } = px;
-  let healthLabel: string, healthStatus: VisionResult["healthStatus"];
+  let healthLabel, healthStatus;
   if (avgExG > 20) { healthLabel = "Cây Khỏe Mạnh 🌱"; healthStatus = "healthy"; }
   else if (avgExG > 5) { healthLabel = "Cây Trung Bình ⚡"; healthStatus = "warning"; }
   else { healthLabel = "Cây Yếu ⚠️"; healthStatus = "unhealthy"; }
 
-  let potLabel: string, potStatus: VisionResult["potStatus"];
+  let potLabel, potStatus;
   if (mt > 0.6) { potLabel = "Phân Hủy Cao 🟤"; potStatus = "decomposed"; }
   else if (mt > 0.3) { potLabel = "Phân Hủy Vừa 🟡"; potStatus = "moderate"; }
   else { potLabel = "Chậu Mới / Tốt 🟢"; potStatus = "new"; }
@@ -94,27 +57,24 @@ function buildVisionResult(px: PixelData, ts: string): VisionResult {
   return { exg: Math.round(avgExG * 10) / 10, mt: Math.round(mt * 100), healthLabel, healthStatus, potLabel, potStatus, timestamp: ts };
 }
 
-// ─── FAO-56 from pigment (no temperature sensor) ─────────────────────────────
-// Instead of temperature, we derive a "thermal stress proxy" from:
-//   - NDVI proxy: high greenness → low stress → lower ET
-//   - Yellowing / brown ratio → chlorophyll loss → higher water stress
-function buildFAOResult(px: PixelData): FAOResult {
-  const { avgExG, greenRatio, mt } = px;
+// ─── FAO-56 from pigment (no temperature/wind sensor — same ExG/mt source as Vision tab) ──
+function buildFAOResult(px) {
+  const { avgExG, mt } = px;
 
-  // NDVI proxy: map ExG (-255..255) to 0..1 range
-  // Healthy green plant: ExG ~30-60 → ndvi ~0.7-0.9
+  // NDVI proxy: map ExG (-255..255) to 0..1 range.
+  // Healthy green plant: ExG ~30-60 -> ndvi ~0.7-0.9
   const ndvi_proxy = Math.max(0, Math.min(1, (avgExG + 30) / 100));
 
-  // Kc (crop coefficient) estimated from greenness
-  // Lush green → Kc ~ 1.1; stressed/yellowing → Kc ~ 0.6
+  // Kc (crop coefficient) estimated from greenness.
+  // Lush green -> Kc ~1.1; stressed/yellowing -> Kc ~0.6
   const kc = Math.max(0.5, Math.min(1.15, 0.5 + ndvi_proxy * 0.65));
 
-  // Thermal stress proxy: low NDVI + high brown → plant under heat/drought stress
-  // Maps to a "temperature equivalent" for ET₀ calculation (25–38°C range)
+  // Thermal-stress proxy: low NDVI + high brown ratio -> plant under heat/drought stress.
+  // Maps to a "temperature equivalent" used only internally for the ET0 formula (25-38C range).
   const temp_equiv = 25 + (1 - ndvi_proxy) * 13 + mt * 5;
 
-  // Reference ET₀ (Hargreaves simplified, using pigment-derived temp)
-  // Assume moderate humidity (65%) and light wind (2 m/s) as defaults
+  // Reference ET0 (Hargreaves-style, fed by pigment-derived temp equivalent).
+  // Humidity/wind are fixed moderate defaults since we no longer read real sensors.
   const humidity = 65;
   const wind = 2;
   let ET0 = (0.2 * temp_equiv) + (0.5 * wind) + (2.5 * (100 - humidity) / 100);
@@ -127,11 +87,10 @@ function buildFAOResult(px: PixelData): FAOResult {
   // Stress multiplier from pigment degradation
   let stress = 1.0;
   stress += (1 - ndvi_proxy) * 0.25; // pigment stress
-  stress += mt * 0.1;                 // pot decomp adds evaporation
+  stress += mt * 0.1;                 // pot decomposition adds evaporation
   stress = Math.max(0.85, Math.min(1.4, stress));
 
-  // Water loss rate (% soil moisture / day)
-  // BioPot coefficient = 0.65 vs normal pot = 1.0
+  // Water loss rate (% soil moisture / day). BioPot coefficient 0.65 vs normal pot 1.0
   const k_pot_normal = 1.0;
   const k_pot_bio = 0.65;
   let v_loss_normal = ETc * k_pot_normal * stress;
@@ -147,10 +106,10 @@ function buildFAOResult(px: PixelData): FAOResult {
   // BioPot improvement
   const pot_efficiency = Math.round(((v_loss_normal / v_loss_bio) - 1) * 100);
 
-  // Estimated current moisture (assume watered recently, 5 days ago)
+  // Estimated current moisture (assumes last watering ~ a few days ago)
   const moisture_now = Math.max(0, 100 - v_loss_normal * 2);
 
-  let statusLabel: string, statusColor: string;
+  let statusLabel, statusColor;
   if (ndvi_proxy > 0.65) { statusLabel = "Cây Phát Triển Tốt ✅"; statusColor = "#48ff96"; }
   else if (ndvi_proxy > 0.35) { statusLabel = "Cây Đang Stress ⚡"; statusColor = "#ffd048"; }
   else { statusLabel = "Cây Thiếu Nước Nghiêm Trọng 🚨"; statusColor = "#ff5a5a"; }
@@ -171,14 +130,12 @@ function buildFAOResult(px: PixelData): FAOResult {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function MetricCard({ label, value, unit, color, sub, dark }: {
-  label: string; value: string | number; unit?: string; color: string; sub?: string; dark: boolean;
-}) {
+function MetricCard({ label, value, unit, color, sub, dark }) {
   return (
-    <div style={{ background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", border: dark ? "1px solid rgba(72,255,150,0.15)" : "1px solid rgba(46,125,50,0.12)", borderRadius: 12, padding: "14px 16px", flex: 1 }}>
+    <div style={{ background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", border: dark ? "1px solid rgba(72,255,150,0.15)" : "1px solid rgba(46,125,50,0.12)", borderRadius: 12, padding: "14px 16px", flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 10, color: dark ? "#8ab" : "#6a8a7a", letterSpacing: 1, marginBottom: 6, textTransform: "uppercase" }}>{label}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-        <span style={{ fontSize: 28, fontWeight: 800, color, fontFamily: "monospace" }}>{value}</span>
+        <span style={{ fontSize: 26, fontWeight: 800, color, fontFamily: "monospace" }}>{value}</span>
         {unit && <span style={{ fontSize: 12, color: dark ? "#8ab" : "#999" }}>{unit}</span>}
       </div>
       {sub && <div style={{ fontSize: 11, color: "#6a8", marginTop: 4 }}>{sub}</div>}
@@ -186,7 +143,7 @@ function MetricCard({ label, value, unit, color, sub, dark }: {
   );
 }
 
-function StatusBadge({ color, label }: { color: string; label: string }) {
+function StatusBadge({ color, label }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: `${color}18`, border: `1px solid ${color}55`, borderRadius: 20, padding: "6px 14px", fontSize: 13, color, fontWeight: 600 }}>
       <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}`, flexShrink: 0 }} />
@@ -195,27 +152,27 @@ function StatusBadge({ color, label }: { color: string; label: string }) {
   );
 }
 
-function ProgressBar({ value, max = 100, color, dark }: { value: number; max?: number; color: string; dark: boolean }) {
+function ProgressBar({ value, max = 100, color, dark }) {
   return (
     <div style={{ background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", borderRadius: 6, height: 8, overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${Math.min(100, (value / max) * 100)}%`, background: color, borderRadius: 6, transition: "width 0.8s ease" }} />
+      <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, (value / max) * 100))}%`, background: color, borderRadius: 6, transition: "width 0.8s ease" }} />
     </div>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function CameraScanner({ darkMode = true }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animRef = useRef<number>(0);
+export default function CameraScanner({ darkMode = true }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const overlayRef = useRef(null);
+  const streamRef = useRef(null);
+  const animRef = useRef(0);
 
-  const [activeTab, setActiveTab] = useState<"fao" | "vision">("fao");
+  const [activeTab, setActiveTab] = useState("fao");
   const [cameraOn, setCameraOn] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<ScanResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
 
   const bg = darkMode ? "#0d1117" : "#f5f5ef";
   const cardBg = darkMode ? "#0a0f14" : "#e8ede8";
@@ -244,7 +201,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
     cancelAnimationFrame(animRef.current);
   }, []);
 
-  // ── Scan ───────────────────────────────────────────────────────────────────
+  // ── Scan: ONE capture -> ONE pixel extraction -> feeds BOTH FAO-56 and AI Vision ──
   const runScan = useCallback(() => {
     if (!videoRef.current || !canvasRef.current || !overlayRef.current) return;
     setScanning(true);
@@ -253,14 +210,14 @@ export default function CameraScanner({ darkMode = true }: Props) {
     const video = videoRef.current;
     const capture = canvasRef.current;
     const overlay = overlayRef.current;
-    const oc = overlay.getContext("2d")!;
+    const oc = overlay.getContext("2d");
     const W = video.videoWidth || 640, H = video.videoHeight || 480;
     capture.width = W; capture.height = H;
     overlay.width = overlay.offsetWidth; overlay.height = overlay.offsetHeight;
 
     const t0 = performance.now();
 
-    const animate = (now: number) => {
+    const animate = (now) => {
       const p = Math.min((now - t0) / SCAN_DURATION_MS, 1);
       const oW = overlay.width, oH = overlay.height;
       oc.clearRect(0, 0, oW, oH);
@@ -283,17 +240,20 @@ export default function CameraScanner({ darkMode = true }: Props) {
 
       if (p < 1) { animRef.current = requestAnimationFrame(animate); return; }
 
-      // Capture & analyze
+      // Capture & analyze — single shared pixel pass
       oc.clearRect(0, 0, oW, oH);
-      const cc = capture.getContext("2d")!;
+      const cc = capture.getContext("2d");
       cc.drawImage(video, 0, 0, W, H);
 
       const px = extractPixelData(capture);
       const ts = new Date().toLocaleTimeString("vi-VN");
 
       if (px.notFound) {
-        setResult({ notFound: true, timestamp: ts, vision: {} as VisionResult, fao: {} as FAOResult });
+        // No plant detected: report the error only, FAO-56 does NOT run.
+        setResult({ notFound: true, timestamp: ts, vision: null, fao: null });
       } else {
+        // Plant detected: both AI Vision and FAO-56 are derived from the SAME px reading,
+        // so they always agree with each other (no separate camera calls / no temp or wind sensors).
         setResult({ notFound: false, timestamp: ts, vision: buildVisionResult(px, ts), fao: buildFAOResult(px) });
       }
       setScanning(false);
@@ -303,24 +263,24 @@ export default function CameraScanner({ darkMode = true }: Props) {
   }, []);
 
   // ── Render helpers ─────────────────────────────────────────────────────────
-  const renderFAO = (fao: FAOResult) => (
+  const renderFAO = (fao, vision) => (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 1, color: accent }}>GIÁM SÁT FAO-56</div>
         <StatusBadge color={fao.statusColor} label={fao.statusLabel} />
       </div>
 
       {/* Top metrics row */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <MetricCard label="Độ Ẩm Hiện Tại" value={fao.moisture_now} unit="%" color={fao.moisture_now > 60 ? accent : fao.moisture_now > 35 ? "#ffd048" : "#ff5a5a"} dark={darkMode} />
         <MetricCard label="Tốc Độ Mất Nước" value={fao.v_loss} unit="%/ngày" color="#f97316" dark={darkMode} />
         <MetricCard label="Ngày Cần Tưới" value={fao.days_to_rewater} unit="ngày" color={fao.days_to_rewater > 4 ? accent : "#ff5a5a"} dark={darkMode} />
       </div>
 
       {/* Secondary metrics */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <MetricCard label="NDVI Sắc Tố" value={fao.ndvi_proxy} color={fao.ndvi_proxy > 0.6 ? accent : "#ffd048"} sub="Từ phân tích pixel" dark={darkMode} />
-        <MetricCard label="ET₀ Tham Chiếu" value={fao.ET0} unit="mm/ngày" color="#60a5fa" sub="Penman ước tính" dark={darkMode} />
+        <MetricCard label="ET₀ Tham Chiếu" value={fao.ET0} unit="mm/ngày" color="#60a5fa" sub="Ước tính từ sắc tố" dark={darkMode} />
         <MetricCard label="Hệ Số Kc" value={fao.kc} color="#c084fc" sub="Từ sắc tố lá" dark={darkMode} />
       </div>
 
@@ -358,12 +318,12 @@ export default function CameraScanner({ darkMode = true }: Props) {
       </div>
 
       <div style={{ marginTop: 12, padding: "8px 12px", background: darkMode ? "rgba(72,255,150,0.04)" : "rgba(46,125,50,0.04)", borderRadius: 8, fontSize: 11, color: textMuted, lineHeight: 1.6 }}>
-        📐 FAO-56 tính từ <strong style={{ color: "#6aaa8a" }}>NDVI sắc tố lá</strong> thay vì cảm biến nhiệt độ — dựa trên ExG = {result?.vision?.exg ?? "—"}, phân tích pixel thực tế.
+        📐 FAO-56 tính từ <strong style={{ color: "#6aaa8a" }}>NDVI sắc tố lá</strong> thay vì cảm biến nhiệt độ/gió — dựa trên cùng một lần chụp với ExG = {vision ? vision.exg : "—"}, phân tích pixel thực tế.
       </div>
     </div>
   );
 
-  const renderVision = (v: VisionResult) => (
+  const renderVision = (v) => (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 1, color: accent }}>PHÂN TÍCH PIXEL AI</div>
@@ -375,7 +335,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
         <StatusBadge color={v.potStatus === "new" ? accent : v.potStatus === "moderate" ? "#ffd048" : "#ff8a5a"} label={v.potLabel} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <MetricCard label="Chỉ Số ExG" value={v.exg} unit="ExG" color={v.healthStatus === "healthy" ? accent : v.healthStatus === "warning" ? "#ffd048" : "#ff5a5a"} sub={v.exg > 20 ? "Xanh lá vượt trội" : v.exg > 5 ? "Xanh lá trung bình" : "Thiếu diệp lục"} dark={darkMode} />
         <MetricCard label="Độ Phân Hủy Mₜ" value={v.mt} unit="%" color={v.mt < 30 ? accent : v.mt < 60 ? "#ffd048" : "#ff8a5a"} sub={v.potStatus === "new" ? "Chậu còn tốt" : "Đang phân hủy"} dark={darkMode} />
       </div>
@@ -391,7 +351,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
       </div>
 
       <div style={{ padding: "8px 12px", background: darkMode ? "rgba(72,255,150,0.04)" : "rgba(46,125,50,0.04)", borderRadius: 8, fontSize: 11, color: textMuted, lineHeight: 1.6 }}>
-        📊 Dựa trên <strong style={{ color: "#6aaa8a" }}>Excess Green Index (ExG = 2G−R−B)</strong> và <strong style={{ color: "#6aaa8a" }}>Brown Pixel Detection</strong> — 100% client-side.
+        📊 Dựa trên <strong style={{ color: "#6aaa8a" }}>Excess Green Index (ExG = 2G−R−B)</strong> và <strong style={{ color: "#6aaa8a" }}>Brown Pixel Detection</strong> — 100% xử lý phía client, cùng nguồn dữ liệu với FAO-56.
       </div>
     </div>
   );
@@ -406,17 +366,17 @@ export default function CameraScanner({ darkMode = true }: Props) {
           <div style={{ width: 42, height: 42, background: accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🌿</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 1 }}>HYDROsense</div>
-            <div style={{ fontSize: 9, color: textMuted, letterSpacing: 2 }}>HỆ SINH THÁI LÕI HOẠT ĐỘNG</div>
+            <div style={{ fontSize: 9, color: textMuted, letterSpacing: 2 }}>FAO-56 + AI VISION · MỘT LẦN CHỤP</div>
           </div>
           <div style={{ marginLeft: "auto", background: "rgba(72,255,150,0.12)", border: `1px solid ${accent}44`, borderRadius: 20, padding: "4px 12px", fontSize: 10, color: accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, display: "inline-block" }} />
-            CHẾ ĐỘ ẢO
+            CAMERA THẬT
           </div>
         </div>
 
-        {/* Tab bar — both tabs clickable */}
+        {/* Tab bar — both tabs clickable at any time */}
         <div style={{ display: "flex", background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)", borderRadius: 10, padding: 4, marginBottom: 16, border: `1px solid ${border}` }}>
-          {([["fao", "📈  Giám Sát FAO-56"], ["vision", "📷  Quét AI Vision"]] as const).map(([id, label]) => (
+          {[["fao", "📈  Giám Sát FAO-56"], ["vision", "📷  Quét AI Vision"]].map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -451,7 +411,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
 
           {scanning && (
             <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.75)", border: `1px solid ${accent}66`, borderRadius: 6, padding: "4px 10px", fontSize: 10, color: accent, letterSpacing: 2, fontWeight: 700 }}>
-              ● ANALYZING FAO-56 + AI VISION...
+              ● ĐANG PHÂN TÍCH FAO-56 + AI VISION...
             </div>
           )}
         </div>
@@ -478,7 +438,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
             disabled={!cameraOn || scanning}
             style={{ flex: 1, padding: "13px 20px", borderRadius: 12, border: "none", background: !cameraOn || scanning ? (darkMode ? "rgba(72,255,150,0.15)" : "rgba(46,125,50,0.1)") : `linear-gradient(135deg,#2ecc71,${accent})`, color: !cameraOn || scanning ? (darkMode ? "#4a7a5a" : "#8aaa8a") : "#0d1117", cursor: !cameraOn || scanning ? "not-allowed" : "pointer", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: !cameraOn || scanning ? "none" : "0 4px 20px rgba(72,255,150,0.3)" }}
           >
-            {scanning ? <>⟳ ĐANG PHÂN TÍCH...</> : <>📷 CHỤP & PHÂN TÍCH</>}
+            {scanning ? <>⟳ ĐANG PHÂN TÍCH...</> : <>📷 CHỤP &amp; PHÂN TÍCH</>}
           </button>
         </div>
 
@@ -488,7 +448,7 @@ export default function CameraScanner({ darkMode = true }: Props) {
             <div style={{ fontSize: 42 }}>🔍</div>
             <div style={{ fontWeight: 800, fontSize: 15, color: "#ff7a7a" }}>Không tìm thấy đối tượng thực vật</div>
             <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, maxWidth: 320 }}>
-              Vui lòng đưa cây hoặc chậu cây vào khung hình và thử lại. Đảm bảo ánh sáng đủ và đối tượng nằm trong vùng quét.
+              Vui lòng đưa cây hoặc chậu cây vào khung hình và thử lại. Đảm bảo ánh sáng đủ và đối tượng nằm trong vùng quét. FAO-56 sẽ không chạy khi chưa phát hiện cây.
             </div>
             <button onClick={() => setResult(null)} style={{ marginTop: 4, padding: "9px 20px", borderRadius: 10, border: "1px solid rgba(255,90,90,0.3)", background: "rgba(255,90,90,0.1)", color: "#ff8a8a", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
               ↺ Quét Lại
@@ -500,14 +460,14 @@ export default function CameraScanner({ darkMode = true }: Props) {
           <div style={{ marginTop: 18, background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)", border: `1px solid ${border}`, borderRadius: 16, padding: 18 }}>
             {/* Result tab switcher */}
             <div style={{ display: "flex", background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)", borderRadius: 8, padding: 3, marginBottom: 16, border: `1px solid ${border}` }}>
-              {([["fao", "📈 FAO-56"], ["vision", "📷 AI Vision"]] as const).map(([id, label]) => (
+              {[["fao", "📈 FAO-56"], ["vision", "📷 AI Vision"]].map(([id, label]) => (
                 <button key={id} onClick={() => setActiveTab(id)} style={{ flex: 1, padding: "7px 0", borderRadius: 6, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, transition: "all 0.2s", background: activeTab === id ? (darkMode ? "rgba(72,255,150,0.15)" : "rgba(46,125,50,0.12)") : "transparent", color: activeTab === id ? accent : textMuted }}>
                   {label}
                 </button>
               ))}
             </div>
 
-            {activeTab === "fao" ? renderFAO(result.fao) : renderVision(result.vision)}
+            {activeTab === "fao" ? renderFAO(result.fao, result.vision) : renderVision(result.vision)}
           </div>
         )}
       </div>
