@@ -41,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import './i18n';
 import CameraScanner from './CameraScanner';
+import ErrorBoundary from './ErrorBoundary';
 
 // Constants
 const POT_TYPES = [
@@ -1092,7 +1093,9 @@ function App() {
       {/* Camera View — fullscreen, replaces everything below nav */}
       {view === 'camera' && (
         <div className="fixed inset-0 z-[50] pt-[60px] lg:pt-[72px]">
-          <CameraScanner darkMode={darkMode} />
+          <ErrorBoundary darkMode={darkMode}>
+            <CameraScanner darkMode={darkMode} />
+          </ErrorBoundary>
         </div>
       )}
 
